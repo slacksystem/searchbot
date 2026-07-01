@@ -16,6 +16,24 @@ class Owner(commands.Cog, name="owner"):
     def __init__(self, bot) -> None:
         self.bot = bot
 
+    @staticmethod
+    def _matches_search_filters(
+        message: discord.Message,
+        user: discord.User = None,
+        message_query: str = None,
+        mentions: discord.User = None,
+    ) -> bool:
+        if user is not None and message.author.id != user.id:
+            return False
+        if (
+            message_query is not None
+            and message_query.lower() not in message.clean_content.lower()
+        ):
+            return False
+        if mentions is not None and mentions.id not in [u.id for u in message.mentions]:
+            return False
+        return True
+
     @commands.command(
         name="sync",
         description="Synchonizes the slash commands.",
@@ -213,6 +231,94 @@ class Owner(commands.Cog, name="owner"):
         :param message: The message that should be repeated by the bot.
         """
         embed = discord.Embed(description=message, color=0xBEBEFE)
+        await context.send(embed=embed)
+
+    @commands.hybrid_command(
+        name="search",
+        description="Search messages across user DMs.",
+    )
+    @app_commands.describe(
+        user="Filter by message author.",
+        message="Filter by text contained in the message.",
+        mentions="Filter by messages that mention this user.",
+        limit="How many recent messages to check per DM channel (max 1000).",
+    )
+    @commands.is_owner()
+    async def search(
+        self,
+        context: Context,
+        user: discord.User = None,
+        *,
+        message: str = None,
+        mentions: discord.User = None,
+        limit: int = 100,
+    ) -> None:
+        """
+        Search messages across all DM channels visible to the bot.
+
+        :param context: The hybrid command context.
+        :param user: Filter by message author.
+        :param message: Filter by text content.
+        :param mentions: Filter by mentioned user.
+        :param limit: Number of recent messages to inspect per DM channel.
+        """
+        if limit < 1 or limit > 1000:
+            embed = discord.Embed(
+                description="`limit` must be between 1 and 1000.",
+                color=0xE02B2B,
+            )
+            await context.send(embed=embed)
+            return
+
+        if user is None and message is None and mentions is None:
+            embed = discord.Embed(
+                description="Please provide at least one filter: `user`, `message`, or `mentions`.",
+                color=0xE02B2B,
+            )
+            await context.send(embed=embed)
+            return
+
+        matched_messages = []
+        for channel in self.bot.private_channels:
+            if not isinstance(channel, discord.DMChannel):
+                continue
+            async for dm_message in channel.history(limit=limit):
+                if self._matches_search_filters(dm_message, user, message, mentions):
+                    matched_messages.append(dm_message)
+
+        if not matched_messages:
+            embed = discord.Embed(
+                description="No DM messages matched the provided filters.",
+                color=0xE02B2B,
+            )
+            await context.send(embed=embed)
+            return
+
+        matched_messages.sort(key=lambda dm_message: dm_message.created_at, reverse=True)
+        shown_messages = matched_messages[:10]
+        result_lines = []
+        for dm_message in shown_messages:
+            channel_user = dm_message.channel.recipient
+            channel_user_text = (
+                f"{channel_user} ({channel_user.id})"
+                if channel_user is not None
+                else f"Unknown ({dm_message.channel.id})"
+            )
+            content = dm_message.clean_content if dm_message.clean_content else "[no text]"
+            if len(content) > 120:
+                content = f"{content[:117]}..."
+            result_lines.append(
+                f"• [{dm_message.created_at.strftime('%Y-%m-%d %H:%M:%S')}] {dm_message.author} in DM with {channel_user_text}: {content}"
+            )
+
+        embed = discord.Embed(
+            title="DM Search Results",
+            description="\n".join(result_lines),
+            color=0xBEBEFE,
+        )
+        embed.set_footer(
+            text=f"Found {len(matched_messages)} match(es), showing {len(shown_messages)}."
+        )
         await context.send(embed=embed)
 
 
