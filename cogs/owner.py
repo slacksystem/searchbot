@@ -248,10 +248,10 @@ class Owner(commands.Cog, name="owner"):
         self,
         context: Context,
         user: discord.User = None,
+        limit: int = 100,
         *,
         message: str = None,
         mentions: discord.User = None,
-        limit: int = 100,
     ) -> None:
         """
         Search messages across all DM channels visible to the bot.
@@ -294,8 +294,11 @@ class Owner(commands.Cog, name="owner"):
             await context.send(embed=embed)
             return
 
-        matched_messages.sort(key=lambda dm_message: dm_message.created_at, reverse=True)
-        shown_messages = matched_messages[:10]
+        shown_messages = sorted(
+            matched_messages,
+            key=lambda dm_message: dm_message.created_at,
+            reverse=True,
+        )[:10]
         result_lines = []
         for dm_message in shown_messages:
             channel_user = dm_message.channel.recipient
