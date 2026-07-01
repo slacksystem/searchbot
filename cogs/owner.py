@@ -33,7 +33,7 @@ class Owner(commands.Cog, name="owner"):
             and message_query.lower() not in message.clean_content.lower()
         ):
             return False
-        if mentions is not None and mentions.id not in [u.id for u in message.mentions]:
+        if mentions is not None and not any(u.id == mentions.id for u in message.mentions):
             return False
         if before is not None and message.created_at >= before:
             return False
@@ -276,7 +276,7 @@ class Owner(commands.Cog, name="owner"):
         :param limit: Number of recent messages to inspect per DM channel.
         """
         if context.interaction is not None:
-            await context.defer()
+            await context.interaction.response.defer()
 
         parsed_before = None
         parsed_after = None
