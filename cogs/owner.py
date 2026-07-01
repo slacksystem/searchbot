@@ -248,7 +248,7 @@ class Owner(commands.Cog, name="owner"):
         self,
         context: Context,
         user: discord.User = None,
-        limit: int = 100,
+        limit: app_commands.Range[int, 1, 1000] = 100,
         *,
         message: str = None,
         mentions: discord.User = None,
@@ -262,7 +262,10 @@ class Owner(commands.Cog, name="owner"):
         :param mentions: Filter by mentioned user.
         :param limit: Number of recent messages to inspect per DM channel.
         """
-        if limit < 1 or limit > 1000:
+        if context.interaction is not None:
+            await context.defer()
+
+        if int(limit) < 1 or int(limit) > 1000:
             embed = discord.Embed(
                 description="`limit` must be between 1 and 1000.",
                 color=0xE02B2B,
@@ -282,7 +285,7 @@ class Owner(commands.Cog, name="owner"):
         for channel in self.bot.private_channels:
             if not isinstance(channel, discord.DMChannel):
                 continue
-            async for dm_message in channel.history(limit=limit):
+            async for dm_message in channel.history(limit=int(limit)):
                 if self._matches_search_filters(dm_message, user, message, mentions):
                     matched_messages.append(dm_message)
 
