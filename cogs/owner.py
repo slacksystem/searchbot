@@ -265,14 +265,6 @@ class Owner(commands.Cog, name="owner"):
         if context.interaction is not None:
             await context.defer()
 
-        if int(limit) < 1 or int(limit) > 1000:
-            embed = discord.Embed(
-                description="`limit` must be between 1 and 1000.",
-                color=0xE02B2B,
-            )
-            await context.send(embed=embed)
-            return
-
         if user is None and message is None and mentions is None:
             embed = discord.Embed(
                 description="Please provide at least one filter: `user`, `message`, or `mentions`.",
@@ -285,7 +277,7 @@ class Owner(commands.Cog, name="owner"):
         for channel in self.bot.private_channels:
             if not isinstance(channel, discord.DMChannel):
                 continue
-            async for dm_message in channel.history(limit=int(limit)):
+            async for dm_message in channel.history(limit=limit):
                 if self._matches_search_filters(dm_message, user, message, mentions):
                     matched_messages.append(dm_message)
 
