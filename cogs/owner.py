@@ -7,6 +7,7 @@ Version: 6.5.0
 """
 
 import discord
+import pendulum
 from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context
@@ -22,6 +23,8 @@ class Owner(commands.Cog, name="owner"):
         user: discord.User = None,
         message_query: str = None,
         mentions: discord.User = None,
+        before: pendulum.DateTime = None,
+        after: pendulum.DateTime = None,
     ) -> bool:
         if user is not None and message.author.id != user.id:
             return False
@@ -31,6 +34,10 @@ class Owner(commands.Cog, name="owner"):
         ):
             return False
         if mentions is not None and mentions.id not in [u.id for u in message.mentions]:
+            return False
+        if before is not None and message.created_at >= before:
+            return False
+        if after is not None and message.created_at <= after:
             return False
         return True
 
@@ -241,6 +248,8 @@ class Owner(commands.Cog, name="owner"):
         user="Filter by message author.",
         message="Filter by text contained in the message.",
         mentions="Filter by messages that mention this user.",
+        before="Only include messages before this datetime.",
+        after="Only include messages after this datetime.",
         limit="How many recent messages to check per DM channel (max 1000).",
     )
     @commands.is_owner()
@@ -252,6 +261,8 @@ class Owner(commands.Cog, name="owner"):
         *,
         message: str = None,
         mentions: discord.User = None,
+        before: str = None,
+        after: str = None,
     ) -> None:
         """
         Search messages across all DM channels visible to the bot.
@@ -260,14 +271,39 @@ class Owner(commands.Cog, name="owner"):
         :param user: Filter by message author.
         :param message: Filter by text content.
         :param mentions: Filter by mentioned user.
+        :param before: Filter for messages before this datetime.
+        :param after: Filter for messages after this datetime.
         :param limit: Number of recent messages to inspect per DM channel.
         """
         if context.interaction is not None:
             await context.defer()
 
-        if user is None and message is None and mentions is None:
+        parsed_before = None
+        parsed_after = None
+        if before is not None:
+            try:
+                parsed_before = pendulum.parse(before, strict=False, tz="UTC")
+            except Exception:
+                embed = discord.Embed(
+                    description="Invalid `before` datetime. Use an ISO-like value, e.g. `2026-07-01T12:30:00Z`.",
+                    color=0xE02B2B,
+                )
+                await context.send(embed=embed)
+                return
+        if after is not None:
+            try:
+                parsed_after = pendulum.parse(after, strict=False, tz="UTC")
+            except Exception:
+                embed = discord.Embed(
+                    description="Invalid `after` datetime. Use an ISO-like value, e.g. `2026-07-01T12:30:00Z`.",
+                    color=0xE02B2B,
+                )
+                await context.send(embed=embed)
+                return
+
+        if user is None and message is None and mentions is None and before is None and after is None:
             embed = discord.Embed(
-                description="Please provide at least one filter: `user`, `message`, or `mentions`.",
+                description="Please provide at least one filter: `user`, `message`, `mentions`, `before`, or `after`.",
                 color=0xE02B2B,
             )
             await context.send(embed=embed)
@@ -278,7 +314,9 @@ class Owner(commands.Cog, name="owner"):
             if not isinstance(channel, discord.DMChannel):
                 continue
             async for dm_message in channel.history(limit=limit):
-                if self._matches_search_filters(dm_message, user, message, mentions):
+                if self._matches_search_filters(
+                    dm_message, user, message, mentions, parsed_before, parsed_after
+                ):
                     matched_messages.append(dm_message)
 
         if not matched_messages:
